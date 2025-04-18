@@ -3,7 +3,8 @@ import os
 from functools import lru_cache
 from sympy import simplify, sympify
 
-# Original implementation is included from the package https://github.com/SMTG-Bham/doped/tree/main
+# Original implementation is included from the package ...
+# https://github.com/SMTG-Bham/doped/tree/main
 # S. R. Kavanagh et al. doped: Python toolkit for robust and repeatable charged defect supercell calculations. Journal of Open Source Software 9 (96), 6433, 2024
 # That version used a non-standard datafile for parsing the Wyckoff positions
 # This implementation uses a standard JSON file for parsing the Wyckoff positions
@@ -69,10 +70,10 @@ def load_wyckoff_json(json_filename="wyckoff.json"):
 def wyckoff_database(json_filename="wyckoff.json"):
     """
     Returns the entire Wyckoff position database loaded from the JSON file.
-    
+
     Args:
         json_filename (str): Path to the Wyckoff JSON data file.
-        
+
     Returns:
         dict: The complete database of Wyckoff positions for all space groups.
               Returns an empty dictionary if loading fails.
@@ -95,8 +96,8 @@ def wyckoff_positions(sgn, json_filename="wyckoff.json"):
               Returns an empty dictionary if the space group is not found
               or an error occurs.
     """
-    # Load the JSON data (uses cached version if already loaded)
-    all_wyckoff_data = load_wyckoff_json(json_filename)
+    # Get the database using the wyckoff_database function
+    all_wyckoff_data = wyckoff_database(json_filename)
     if not all_wyckoff_data:  # Check if loading failed
         return {}
 
@@ -111,7 +112,7 @@ def wyckoff_positions(sgn, json_filename="wyckoff.json"):
             # Look for variants with this base number
             base_sg_number = spacegroup_key.split("-")[0] if "-" in spacegroup_key else spacegroup_key
             variants = [k for k in all_wyckoff_data.keys() if k.startswith(f"{base_sg_number}-")]
-            
+
             if variants:
                 # Use the first variant as default (usually -b setting)
                 spacegroup_key = variants[0]
@@ -124,7 +125,7 @@ def wyckoff_positions(sgn, json_filename="wyckoff.json"):
         else:
             print(f"Warning: Space group '{spacegroup_key}' not found in '{json_filename}'.")
             return {}
-            
+
     # If we still don't have valid data, return empty dict
     if spacegroup_data is None:
         return {}
@@ -219,14 +220,6 @@ def wyckoff_positions(sgn, json_filename="wyckoff.json"):
                             f"Warning: Dimension mismatch between base coord {base_coord} and equiv site {equiv_site}"
                         )
 
-        # Use a set to store string representations to ensure uniqueness, then convert back
-        # unique_coords_str_set = set(str(coord) for coord in combined_coords)
-        # Note: Converting back from string might lose the sympy object type if not handled carefully,
-        # but for uniqueness check based on simplified form, string comparison is okay.
-        # If sympy objects are strictly needed, a different uniqueness check would be required.
-        # For now, let's keep all calculated coordinates, assuming the source data implies they are distinct operations.
-        # If duplicates arise purely from simplification (e.g., x+1/2 and 1/2+x), the original script might have kept them too.
-        # Let's keep the combined_coords list as is, including potential duplicates after simplification.
         wyckoff_label_coords_dict[label] = combined_coords
 
     return wyckoff_label_coords_dict
