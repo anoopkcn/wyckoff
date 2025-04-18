@@ -193,6 +193,31 @@ def wyckoff_positions(sgn, json_filename="wyckoff.json"):
             for coords_str in coordinates_str_list
         ]
 
+        # Helper function to check if a coordinate is already in the list
+        def is_coord_in_list(coord, coord_list):
+            """Check if a coordinate is mathematically equivalent to any in the list."""
+            for existing_coord in coord_list:
+                if len(coord) != len(existing_coord):
+                    continue
+                    
+                # Check if all elements are mathematically equivalent
+                all_equal = True
+                for c1, c2 in zip(coord, existing_coord):
+                    # Try to check if c1 - c2 simplifies to 0
+                    try:
+                        diff = cached_simplify(c1 - c2)
+                        if diff != 0:
+                            all_equal = False
+                            break
+                    except Exception:
+                        # If comparison fails, assume they're different
+                        all_equal = False
+                        break
+                        
+                if all_equal:
+                    return True
+            return False
+            
         # Combine base coordinates with equivalent sites
         combined_coords = []
         if not equivalent_sites_parsed:
@@ -210,7 +235,9 @@ def wyckoff_positions(sgn, json_filename="wyckoff.json"):
                                 cached_simplify(b + e)
                                 for b, e in zip(base_coord, equiv_site)
                             ]
-                            combined_coords.append(new_coord)
+                            # Only add if this coordinate isn't already in the list
+                            if not is_coord_in_list(new_coord, combined_coords):
+                                combined_coords.append(new_coord)
                         except Exception as e:
                             print(
                                 f"Warning: Could not combine {base_coord} and {equiv_site}. Error: {e}"
