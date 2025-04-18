@@ -14,4 +14,4 @@ __all__ = [
     'cached_simplify'
 ]
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
