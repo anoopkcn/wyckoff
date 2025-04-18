@@ -16,7 +16,7 @@ authors = [
 ]
 
 [project.urls]
-Repository = "https://github.com/anoopkc/wyckoff"
+Repository = "https://github.com/anoopkcn/wyckoff"
 
 [tool.hatch.build.targets.wheel]
 packages = ["wyckoff"]
