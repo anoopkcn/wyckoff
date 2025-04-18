@@ -61,9 +61,10 @@ print(positions)
 
 ## Data Source
 
-This package is based on crystallographic data from the International Tables for Crystallography.
-The original implementation is derived from the [doped](https://github.com/SMTG-Bham/doped/tree/main) project:
-S. R. Kavanagh et al. doped: Python toolkit for robust and repeatable charged defect supercell calculations. Journal of Open Source Software 9 (96), 6433, 2024.
+This package is based on crystallographic data from [bilbao crystallographic server](https://www.cryst.ehu.es/).
+The inspiration for this package was drawn from the [doped](https://github.com/SMTG-Bham/doped/tree/main) project:
+`S. R. Kavanagh et al. doped: Python toolkit for robust and repeatable charged defect supercell calculations. Journal of Open Source Software 9 (96), 6433, 2024.`
+Where they implemented a similar approach for handling wyckoff positions but they have custom data format.
 
 ## License
 
