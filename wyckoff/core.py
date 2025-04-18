@@ -66,13 +66,13 @@ def load_wyckoff_json(json_filename="wyckoff.json"):
     return _WYCKOFF_JSON_DATA
 
 
-def get_wyckoff_database(json_filename="wyckoff.json"):
+def wyckoff_database(json_filename="wyckoff.json"):
     """
     Returns the entire Wyckoff position database loaded from the JSON file.
-
+    
     Args:
         json_filename (str): Path to the Wyckoff JSON data file.
-
+        
     Returns:
         dict: The complete database of Wyckoff positions for all space groups.
               Returns an empty dictionary if loading fails.
@@ -80,7 +80,7 @@ def get_wyckoff_database(json_filename="wyckoff.json"):
     return load_wyckoff_json(json_filename)
 
 
-def get_wyckoff_dict_from_sgn(sgn, json_filename="wyckoff.json"):
+def wyckoff_positions(sgn, json_filename="wyckoff.json"):
     """
     Get dictionary of {Wyckoff label: coordinates} for a given space group
     number (sgn) by reading from a pre-parsed JSON file.
@@ -104,10 +104,29 @@ def get_wyckoff_dict_from_sgn(sgn, json_filename="wyckoff.json"):
     spacegroup_key = str(sgn)
     spacegroup_data = all_wyckoff_data.get(spacegroup_key)
 
+    # If exact match not found, try to find variants (e.g., "3-b", "3-c" for input "3")
     if spacegroup_data is None:
-        print(
-            f"Warning: Space group '{spacegroup_key}' not found in '{json_filename}'."
-        )
+        # Try to find a default setting
+        if not isinstance(sgn, str) or "-" not in spacegroup_key:
+            # Look for variants with this base number
+            base_sg_number = spacegroup_key.split("-")[0] if "-" in spacegroup_key else spacegroup_key
+            variants = [k for k in all_wyckoff_data.keys() if k.startswith(f"{base_sg_number}-")]
+            
+            if variants:
+                # Use the first variant as default (usually -b setting)
+                spacegroup_key = variants[0]
+                spacegroup_data = all_wyckoff_data.get(spacegroup_key)
+                print(f"Note: Using space group '{spacegroup_key}' as default setting for space group {base_sg_number}.")
+                print(f"Available variants: {', '.join(variants)}")
+            else:
+                print(f"Warning: Space group '{sgn}' not found in '{json_filename}'.")
+                return {}
+        else:
+            print(f"Warning: Space group '{spacegroup_key}' not found in '{json_filename}'.")
+            return {}
+            
+    # If we still don't have valid data, return empty dict
+    if spacegroup_data is None:
         return {}
 
     wyckoff_label_coords_dict = {}
