@@ -16,7 +16,7 @@ def main():
     print(f"Available space groups: {available_groups}\n")
 
     # Get Wyckoff positions for specific space groups
-    for sg in [1, 2, 3]:
+    for sg in [1, 2, 5]:
         print(f"\nSpace group {sg}:")
         positions = wyckoff_positions(sg)
         for label, position_data in positions.items():
