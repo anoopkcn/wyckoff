@@ -6,11 +6,13 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Union, Any, Optional, Tuple
 from sympy import simplify, sympify
 
-# Original implementation is included from the package ...
+# This implementation is is inspierd by a utility fuction in ...
 # https://github.com/SMTG-Bham/doped/tree/main
-# S. R. Kavanagh et al. doped: Python toolkit for robust and repeatable charged defect supercell calculations. Journal of Open Source Software 9 (96), 6433, 2024
-# That version used a non-standard datafile for parsing the Wyckoff positions
+# That version used a non-standard datafile for parsing the Wyckoff positions from bilbao crystallographic server
 # This implementation uses a standard JSON file for parsing the Wyckoff positions
+# Add additional checks and validations to ensure data integrity
+# remove a bug that produces duplicate Wyckoff positions
+# custom wyckoff dataclass
 
 def profile_execution(func):
     """Decorator to measure and report execution time."""
@@ -185,31 +187,31 @@ class WyckoffDatabase:
             except KeyError:
                 # If not found, look for a variant
                 sg_key, sg_data = self.db_instance.find_space_group_variant(key)
-            
+
                 # No space group or variant found
                 if sg_key is None:
                     raise KeyError(f"Space group '{key}' not found and no suitable variants exist")
-                
+
                 # Variant exists and is already in processed data
                 if sg_key in self:
                     return super().__getitem__(sg_key)
-                
+
                 # Variant exists but needs to be processed
                 positions = self.db_instance._process_space_group(sg_data, sg_key)
                 if positions:
                     return positions
-                
+
                 # No valid positions found
                 raise KeyError(f"Could not process space group '{key}' or its variant '{sg_key}'")
 
     @property
     def data(self) -> Dict[str, List[Wyckoff]]:
         """Get the fully processed Wyckoff database.
-    
+
         Returns:
             A dictionary mapping space group numbers/settings to lists of
             WyckoffPosition objects with processed coordinates.
-        
+
         Note:
             This dictionary provides fallback lookups to space group variants.
             For example, if you request data['3'] but only '3-b' exists,
@@ -217,7 +219,7 @@ class WyckoffDatabase:
         """
         if self._processed_data is None:
             self._processed_data = self._process_database()
-    
+
         # Wrap the processed data in our custom dictionary class
         return self.SpaceGroupDict(self._processed_data, self)
 
@@ -438,10 +440,10 @@ class WyckoffDatabase:
 
     def wyckoff_positions(self, sgn: Union[int, str]) -> Dict[str, List[List[Any]]]:
         """Get dictionary of {Wyckoff label: coordinates} for a given space group.
-    
+
         Args:
             sgn: Space group number or label (e.g., "15-c")
-        
+
         Returns:
             Dictionary mapping Wyckoff labels to lists of coordinate arrays
         """
@@ -483,7 +485,7 @@ def wyckoff_database(json_filename: str = "wyckoff.json") -> Dict[str, List[Wyck
     Returns:
         Dictionary mapping space group numbers/settings to lists of
         WyckoffPosition objects with processed coordinates
-        
+
     Note:
         This dictionary provides fallback lookups to space group variants.
         For example, if you request result['3'] but only '3-b' exists,
@@ -501,7 +503,7 @@ def wyckoff_positions(sgn: Union[int, str], json_filename: str = "wyckoff.json")
 
     Returns:
         Dictionary mapping Wyckoff labels to lists of coordinate arrays
-        
+
     Note:
         This function automatically finds space group variants when needed.
         For example, if you request positions for space group 3 but only
