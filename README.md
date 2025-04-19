@@ -14,25 +14,21 @@ uv add wyckoff
 
 ## Usage
 
+Simple Example:
+
 ```python
 from wyckoff import WyckoffDatabase
-# OR
-# from wyckoff import wyckoff_positions, wyckoff_database
 
-wycoff = WyckoffDatabase()
-data = wycoff.data # or wyckoff_database()
-wyckoff_positions = wycoff.wyckoff_positions # or wyckoff_positions
+wyckoff = WyckoffDatabase()
+data = wyckoff.data
 
-# Get Wyckoff positions for a specific space group
-positions = wyckoff_positions(1)  # Space group 1
-print(positions)
+for items in data["2"]:
+    print(items)
 
-# Get the entire database
-data = wyckoff_database()
-# Print first label and positions of space group 2
-for item in data["2"]:
-    print(f"{item.label}: {item.positions}")
+print("Spacegroup 3 (which is 3-b varient):")
+print(data["3"][0])
 ```
+for more complex example checkout the [example](https://github.com/anoopkcn/wyckoff/blob/main/examples/example_usage.py) file
 
 # Info
 
@@ -46,6 +42,7 @@ If spacegroup variations are available, and functions are called without specify
 
 Example:
 ```python
+wyckoff_positions = WyckoffDatabase().wyckoff_positions
 positions = wyckoff_positions("3-b")  # Space group 3 with b-axis as the unique axis
 print(positions)
 ```
@@ -69,10 +66,8 @@ print(positions)
 
 ## Data Source
 
-This package is based on crystallographic data from [bilbao crystallographic server](https://www.cryst.ehu.es/).
-The inspiration for this package was drawn from the [doped](https://github.com/SMTG-Bham/doped/tree/main) project:
-`S. R. Kavanagh et al. doped: Python toolkit for robust and repeatable charged defect supercell calculations. Journal of Open Source Software 9 (96), 6433, 2024.`
-Where they implemented a similar approach for handling wyckoff positions but they have custom data format.
+This implementation is inspierd by a utility fuction in [doped](https://github.com/SMTG-Bham/doped/tree/main) project. That version used a non-standard datafile for parsing the Wyckoff positions from [bilbao crystallographic server](https://www.cryst.ehu.es/). This implementation uses a standard JSON file for parsing the Wyckoff positions, add additional checks and validations to ensure data integrity, remove a bug that produces duplicate Wyckoff positions
+and custom wyckoff dataclass, etc,.
 
 ## License
 

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Union, Any, Optional, Tuple
 from sympy import simplify, sympify
 
-# This implementation is is inspierd by a utility fuction in ...
+# This implementation is inspierd by a utility fuction in ...
 # https://github.com/SMTG-Bham/doped/tree/main
 # That version used a non-standard datafile for parsing the Wyckoff positions from bilbao crystallographic server
 # This implementation uses a standard JSON file for parsing the Wyckoff positions
