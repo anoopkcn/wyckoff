@@ -248,13 +248,13 @@ class WyckoffDatabase:
         """Convert a coordinate string to a list of sympy expressions.
 
         Args:
-            coord_string: String like "(x,y,z)" representing coordinates
+            coord_string: String like "x,y,z" representing coordinates
 
         Returns:
             List of sympy expressions
         """
         # Remove parentheses and split by comma
-        parts = coord_string.strip("()").split(",")
+        parts = coord_string.split(",")
         return [self._process_coordinate_part(part) for part in parts]
 
     def _is_coord_in_list(self, coord: List[Any], coord_list: List[List[Any]]) -> bool:
