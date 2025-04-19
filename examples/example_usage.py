@@ -1,26 +1,30 @@
 #!/usr/bin/env python
 # Example script demonstrating how to use the wyckoff package
 
-from wyckoff import wyckoff_positions, wyckoff_database
+from wyckoff import WyckoffDatabase
+# or import these functions
+#from wyckoff import wyckoff_positions, wyckoff_database
 
 
 def main():
     print("Example usage of the Wyckoff package\n")
 
-    database = wyckoff_database()
+    wycoff = WyckoffDatabase()
+    data = wycoff.data # or wyckoff_database()
+    wyckoff_positions = wycoff.wyckoff_positions #or wyckoff_positions
 
-    available_groups = list(database.keys())
+    available_groups = list(data.keys())
     total_space_groups = len(available_groups)
     print(f"Number of space groups: {total_space_groups} (230 standard + {len(available_groups) - 230} variations)")
 
     print("\nSpace group 1(unformatted):")
-    print(database["1"]) # Type Wyckoff
+    print(data["1"]) # Type Wyckoff
 
     print("\nSpace group 1(formatted):")
-    print(f"\t{database['1'][0].label}: {database['1'][0].positions}")
+    print(f"\t{data['1'][0].label}: {data['1'][0].positions}")
 
     print("\nSpace group 2:")
-    for item in database["2"]:
+    for item in data["2"]:
         print(f"\t{item.label}: {item.positions}")
 
     # space group for 5 is variant 5-b

@@ -15,15 +15,23 @@ uv add wyckoff
 ## Usage
 
 ```python
-from wyckoff import wyckoff_positions, wyckoff_database
+from wyckoff import WyckoffDatabase
+# OR
+# from wyckoff import wyckoff_positions, wyckoff_database
+
+wycoff = WyckoffDatabase()
+data = wycoff.data # or wyckoff_database()
+wyckoff_positions = wycoff.wyckoff_positions # or wyckoff_positions
 
 # Get Wyckoff positions for a specific space group
 positions = wyckoff_positions(1)  # Space group 1
 print(positions)
 
 # Get the entire database
-database = wyckoff_database()
-print(list(database.keys())[:5])  # Print first 5 space group numbers
+data = wyckoff_database()
+# Print first label and positions of space group 2
+for item in data["2"]:
+    print(f"{item.label}: {item.positions}")
 ```
 
 # Info
