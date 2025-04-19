@@ -385,8 +385,8 @@ class WyckoffDatabase:
                 # Use the first variant as default (usually -b setting)
                 spacegroup_key = variants[0]
                 spacegroup_data = raw_data.get(spacegroup_key)
-                print(f"Note: Using space group '{spacegroup_key}' as default setting for space group {base_sg_number}.")
-                print(f"Available variants: {', '.join(variants)}")
+                # print(f"Note: Using space group '{spacegroup_key}' as default setting for space group {base_sg_number}.")
+                # print(f"Available variants: {', '.join(variants)}")
                 return spacegroup_key, spacegroup_data
             else:
                 print(f"Warning: Space group '{sgn}' not found.")
