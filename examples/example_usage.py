@@ -2,16 +2,19 @@
 # Example script demonstrating how to use the wyckoff package
 
 from wyckoff import WyckoffDatabase
-# or import these functions
-#from wyckoff import wyckoff_positions, wyckoff_database
-
 
 def main():
     print("Example usage of the Wyckoff package\n")
 
     wycoff = WyckoffDatabase()
-    data = wycoff.data # or wyckoff_database()
-    wyckoff_positions = wycoff.wyckoff_positions #or wyckoff_positions
+    data = wycoff.data
+
+    def wyckoff_positions(sgn):
+        try:
+            space_group = data[str(sgn)]
+            return {pos.label: pos.positions for pos in space_group.wyckoff_positions if pos.label is not None}
+        except KeyError:
+            return {}
 
     available_groups = list(data.keys())
     total_space_groups = len(available_groups)
