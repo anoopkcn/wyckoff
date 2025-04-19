@@ -42,8 +42,7 @@ If spacegroup variations are available, and functions are called without specify
 
 Example:
 ```python
-wyckoff_positions = WyckoffDatabase().wyckoff_positions
-positions = wyckoff_positions("3-b")  # Space group 3 with b-axis as the unique axis
+positions = wyckoff.wyckoff_positions("3-b")  # Space group 3 with b-axis as the unique axis
 print(positions)
 ```
 
@@ -53,14 +52,14 @@ print(positions)
 
 Example:
 ```python
-positions = wyckoff_positions("48-1")  # Space group 48 with origin choice 1
+positions = wyckoff.wyckoff_positions("48-1")  # Space group 48 with origin choice 1
 print(positions)
 ```
 3. **Cell choices**: Some suffixes may represent different conventional cell choices (hexagonal vs. rhombohedral settings in trigonal groups, for example).
 
 Example:
 ```python
-positions = wyckoff_positions("148-hexagonal")  # Space group 148 with hexagonal cell
+positions = wyckoff.wyckoff_positions("148-hexagonal")  # Space group 148 with hexagonal cell
 print(positions)
 ```
 
