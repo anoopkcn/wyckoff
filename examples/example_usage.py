@@ -18,13 +18,13 @@ def main():
     print(f"Number of space groups: {total_space_groups} (230 standard + {len(available_groups) - 230} variations)")
 
     print("\nSpace group 1(unformatted):")
-    print(data["1"]) # Type Wyckoff
+    print(data["1"]) # Type SpaceGroup
 
     print("\nSpace group 1(formatted):")
-    print(f"\t{data['1'][0].label}: {data['1'][0].positions}")
+    print(f"\t{data['1'].wyckoff_positions[0].label}: {data['1'].wyckoff_positions[0].positions}")
 
     print("\nSpace group 2:")
-    for item in data["2"]:
+    for item in data["2"].wyckoff_positions:
         print(f"\t{item.label}: {item.positions}")
 
     # space group for 5 is variant 5-b
@@ -35,7 +35,7 @@ def main():
             print(f" \t{label}: {position_data}")
 
     print("\nSpace group 3 first label:")
-    print(data["3"][0].label)
+    print(data["3"].wyckoff_positions[0].label)
 
     # print("\nSpace group 48-1:")
     # positions = wyckoff_positions("48-1")

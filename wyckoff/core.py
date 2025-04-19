@@ -91,9 +91,9 @@ class Wyckoff:
     letter: str
     multiplicity: int
     site_symmetry: str = ""
-    coordinates: List[str] = field(default_factory=list)
-    positions: List[List[Any]] = field(default_factory=list)
     label: Optional[str] = None
+    positions: List[List[Any]] = field(default_factory=list)
+    coordinates: List[List[Any]] = field(default_factory=list)
 
     def __post_init__(self):
         """Calculate the label if not provided."""
@@ -101,7 +101,13 @@ class Wyckoff:
             self.label = f"{self.multiplicity}{self.letter}"
 
 
-# Core functionality
+@dataclass
+class SpaceGroup:
+    """Represents a space group with its Wyckoff positions and additional positions."""
+    number: str
+    additional_positions: List[List[Any]] = field(default_factory=list)
+    wyckoff_positions: List[Wyckoff] = field(default_factory=list)
+
 
 @functools.lru_cache(maxsize=int(1e5))
 def cached_simplify(eq):
@@ -197,20 +203,20 @@ class WyckoffDatabase:
                     return super().__getitem__(sg_key)
 
                 # Variant exists but needs to be processed
-                positions = self.db_instance._process_space_group(sg_data, sg_key)
-                if positions:
-                    return positions
+                space_group = self.db_instance._process_space_group(sg_data, sg_key)
+                if space_group.wyckoff_positions:
+                    return space_group
 
                 # No valid positions found
                 raise KeyError(f"Could not process space group '{key}' or its variant '{sg_key}'")
 
     @property
-    def data(self) -> Dict[str, List[Wyckoff]]:
+    def data(self) -> Dict[str, SpaceGroup]:
         """Get the fully processed Wyckoff database.
 
         Returns:
-            A dictionary mapping space group numbers/settings to lists of
-            WyckoffPosition objects with processed coordinates.
+            A dictionary mapping space group numbers/settings to SpaceGroup objects
+            with processed Wyckoff positions and coordinates.
 
         Note:
             This dictionary provides fallback lookups to space group variants.
@@ -306,8 +312,7 @@ class WyckoffDatabase:
         position = Wyckoff(
             letter=letter,
             multiplicity=multiplicity,
-            site_symmetry=site_symmetry,
-            coordinates=coordinates_str_list
+            site_symmetry=site_symmetry
         )
 
         # Parse the base coordinates for this Wyckoff position
@@ -315,6 +320,9 @@ class WyckoffDatabase:
             self._coord_string_to_sympy_array(coords_str)
             for coords_str in coordinates_str_list
         ]
+
+        # Store processed coordinates
+        position.coordinates = base_wyckoff_coords
 
         # Combine base coordinates with equivalent sites
         combined_coords = []
@@ -349,7 +357,7 @@ class WyckoffDatabase:
         position.positions = combined_coords
         return position
 
-    def _process_space_group(self, spacegroup_data: Dict, spacegroup_key: str) -> List[Wyckoff]:
+    def _process_space_group(self, spacegroup_data: Dict, spacegroup_key: str) -> SpaceGroup:
         """Process all Wyckoff positions for a single space group.
 
         Args:
@@ -357,10 +365,10 @@ class WyckoffDatabase:
             spacegroup_key: Space group number/setting
 
         Returns:
-            List of processed WyckoffPosition objects
+            SpaceGroup object with processed Wyckoff positions
         """
         if spacegroup_data is None:
-            return []
+            return SpaceGroup(number=spacegroup_key)
 
         # Parse the additional positions (equivalent sites) first
         equivalent_sites_str = spacegroup_data.get("additional_positions", [])
@@ -368,23 +376,28 @@ class WyckoffDatabase:
             self._coord_string_to_sympy_array(coords) for coords in equivalent_sites_str
         ]
 
+        # Create SpaceGroup object
+        space_group = SpaceGroup(
+            number=spacegroup_key,
+            additional_positions=equivalent_sites_parsed
+        )
+
         # Process each Wyckoff position
-        positions = []
         for wyckoff_info in spacegroup_data.get("wyckoff_positions", []):
             position = self._process_wyckoff_position(
                 wyckoff_info, spacegroup_key, equivalent_sites_parsed
             )
             if position is not None:
-                positions.append(position)
+                space_group.wyckoff_positions.append(position)
 
-        return positions
+        return space_group
 
-    def _process_database(self) -> Dict[str, List[Wyckoff]]:
+    def _process_database(self) -> Dict[str, SpaceGroup]:
         """Process the entire database of Wyckoff positions.
 
         Returns:
-            Dictionary mapping space group numbers/settings to lists of
-            processed WyckoffPosition objects.
+            Dictionary mapping space group numbers/settings to SpaceGroup objects
+            with processed Wyckoff positions.
         """
         raw_data = self.load_raw_data()
         if not raw_data:
@@ -392,9 +405,9 @@ class WyckoffDatabase:
 
         processed_data = {}
         for spacegroup_key, spacegroup_data in raw_data.items():
-            processed_positions = self._process_space_group(spacegroup_data, spacegroup_key)
-            if processed_positions:
-                processed_data[spacegroup_key] = processed_positions
+            space_group = self._process_space_group(spacegroup_data, spacegroup_key)
+            if space_group.wyckoff_positions:  # Only add if it has Wyckoff positions
+                processed_data[spacegroup_key] = space_group
 
         return processed_data
 
@@ -449,9 +462,9 @@ class WyckoffDatabase:
         """
         try:
             # Leverage the SpaceGroupDict to handle variant lookups
-            positions = self.data[str(sgn)]
+            space_group = self.data[str(sgn)]
             # Convert the positions to the expected output format
-            return {pos.label: pos.positions for pos in positions if pos.label is not None}
+            return {pos.label: pos.positions for pos in space_group.wyckoff_positions if pos.label is not None}
         except KeyError:
             # Return empty dict if no valid space group or variant is found
             return {}
@@ -476,15 +489,15 @@ def get_wyckoff_database(json_filename: str = "wyckoff.json") -> WyckoffDatabase
     return _wyckoff_db_instance
 
 
-def wyckoff_database(json_filename: str = "wyckoff.json") -> Dict[str, List[Wyckoff]]:
+def wyckoff_database(json_filename: str = "wyckoff.json") -> Dict[str, SpaceGroup]:
     """Get the fully processed Wyckoff position database.
 
     Args:
         json_filename: Path to the JSON file containing Wyckoff positions
 
     Returns:
-        Dictionary mapping space group numbers/settings to lists of
-        WyckoffPosition objects with processed coordinates
+        Dictionary mapping space group numbers/settings to SpaceGroup objects
+        with processed Wyckoff positions and coordinates
 
     Note:
         This dictionary provides fallback lookups to space group variants.
