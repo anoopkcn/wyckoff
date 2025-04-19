@@ -1,6 +1,9 @@
 import json
 import os
-from functools import lru_cache
+import time
+import functools
+from dataclasses import dataclass, field
+from typing import List, Dict, Union, Any, Optional, Tuple
 from sympy import simplify, sympify
 
 # Original implementation is included from the package ...
@@ -8,190 +11,269 @@ from sympy import simplify, sympify
 # S. R. Kavanagh et al. doped: Python toolkit for robust and repeatable charged defect supercell calculations. Journal of Open Source Software 9 (96), 6433, 2024
 # That version used a non-standard datafile for parsing the Wyckoff positions
 # This implementation uses a standard JSON file for parsing the Wyckoff positions
-# adds additional checks for redundant Wyckoff positions. Adds functions to return the full database
 
-_WYCKOFF_JSON_DATA = None
+# Decorators for common patterns
+
+def profile_execution(func):
+    """Decorator to measure and report execution time."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        print(f"{func.__name__} executed in {end_time - start_time:.4f} seconds")
+        return result
+    return wrapper
 
 
-@lru_cache(maxsize=int(1e5))
+def safe_coord_processing(func):
+    """Decorator to safely process coordinate expressions and handle exceptions."""
+    @functools.wraps(func)
+    def wrapper(part, *args, **kwargs):
+        try:
+            return func(part, *args, **kwargs)
+        except (SyntaxError, TypeError, Exception) as e:
+            print(f"Warning: Could not parse coordinate part '{part}'. Error: {e}")
+            return part  # Return original string on error
+    return wrapper
+
+
+def validate_wyckoff_info(func):
+    """Decorator to validate required Wyckoff position fields."""
+    @functools.wraps(func)
+    def wrapper(self_or_wyckoff_info, *args, **kwargs):
+        # If this is a method, the first arg is self and wyckoff_info is the second arg
+        # If this is a function, the first arg is wyckoff_info
+        if hasattr(self_or_wyckoff_info, '_process_wyckoff_position'):
+            # This is a method call (self is first arg)
+            self = self_or_wyckoff_info
+            wyckoff_info = args[0]
+            spacegroup_key = args[1]
+            remaining_args = args[2:]
+        else:
+            # This is a function call (wyckoff_info is first arg)
+            self = None
+            wyckoff_info = self_or_wyckoff_info
+            spacegroup_key = args[0]
+            remaining_args = args[1:]
+            
+        letter = wyckoff_info.get("letter")
+        multiplicity = wyckoff_info.get("multiplicity")
+        
+        if letter is None or multiplicity is None:
+            print(f"Skipping incomplete Wyckoff entry in space group {spacegroup_key}: {wyckoff_info}")
+            return None
+        
+        # Ensure types are correct
+        if not isinstance(letter, str) or not isinstance(multiplicity, int):
+            try:
+                letter = str(letter)
+                multiplicity = int(multiplicity)
+                # Update the dictionary with converted values
+                wyckoff_info["letter"] = letter
+                wyckoff_info["multiplicity"] = multiplicity
+            except (ValueError, TypeError):
+                print(f"Invalid types in Wyckoff entry for space group {spacegroup_key}: {wyckoff_info}")
+                return None
+        
+        if self is not None:
+            # Method call
+            return func(self, wyckoff_info, spacegroup_key, *remaining_args, **kwargs)
+        else:
+            # Function call
+            return func(wyckoff_info, spacegroup_key, *remaining_args, **kwargs)
+    return wrapper
+
+
+# Data classes for structured representation
+
+@dataclass
+class WyckoffPosition:
+    """Represents a single Wyckoff position with its properties and coordinates."""
+    letter: str
+    multiplicity: int
+    site_symmetry: str = ""
+    coordinates: List[str] = field(default_factory=list)
+    positions: List[List[Any]] = field(default_factory=list)
+    label: Optional[str] = None
+    
+    def __post_init__(self):
+        """Calculate the label if not provided."""
+        if self.label is None:
+            self.label = f"{self.multiplicity}{self.letter}"
+
+
+# Core functionality
+
+@functools.lru_cache(maxsize=int(1e5))
 def cached_simplify(eq):
-    """
-    Cached simplification function for ``sympy`` equations, for efficiency.
-    """
+    """Cached simplification function for ``sympy`` equations, for efficiency."""
     # Ensure input is a sympy object before simplifying
     return simplify(sympify(eq))
 
 
-def _get_data_file_path(filename):
-    """
-    Helper function to get the path to a data file in the package.
+class WyckoffDatabase:
+    """Class for handling Wyckoff position data with processing capabilities."""
+    
+    def __init__(self, json_filename: str = "wyckoff.json"):
+        """Initialize the database handler.
+        
+        Args:
+            json_filename: Path to the JSON file containing Wyckoff positions.
+        """
+        self.json_filename = json_filename
+        self._raw_data = None
+        self._processed_data = None
+    
+    def _get_data_file_path(self, filename: str) -> str:
+        """Helper function to get the path to a data file in the package.
 
-    Args:
-        filename (str): Name of the data file to find
+        Args:
+            filename: Name of the data file to find
 
-    Returns:
-        str: Full path to the data file
-    """
-    # First check if the file exists in the specified path
-    if os.path.isfile(filename):
+        Returns:
+            Full path to the data file
+        """
+        # First check if the file exists in the specified path
+        if os.path.isfile(filename):
+            return filename
+
+        # Then look in the package's data directory
+        package_dir = os.path.dirname(os.path.abspath(__file__))
+        data_path = os.path.join(package_dir, 'data', filename)
+
+        if os.path.isfile(data_path):
+            return data_path
+
+        # If not found, return the original filename and let the caller handle errors
         return filename
-
-    # Then look in the package's data directory
-    package_dir = os.path.dirname(os.path.abspath(__file__))
-    data_path = os.path.join(package_dir, 'data', filename)
-
-    if os.path.isfile(data_path):
-        return data_path
-
-    # If not found, return the original filename and let the caller handle errors
-    return filename
-
-
-def load_wyckoff_json(json_filename="wyckoff.json"):
-    """Loads the Wyckoff data from the JSON file."""
-    global _WYCKOFF_JSON_DATA
-    if _WYCKOFF_JSON_DATA is None:
-        try:
-            # Find the data file
-            data_path = _get_data_file_path(json_filename)
-            with open(data_path, "r") as f:
-                _WYCKOFF_JSON_DATA = json.load(f)
-        except FileNotFoundError:
-            print(f"Error: Wyckoff JSON file '{json_filename}' not found.")
-            _WYCKOFF_JSON_DATA = {}  # Set to empty dict to avoid repeated load attempts
-        except json.JSONDecodeError:
-            print(f"Error: Could not decode JSON from file '{json_filename}'.")
-            _WYCKOFF_JSON_DATA = {}
-        except Exception as e:
-            print(f"An unexpected error occurred loading '{json_filename}': {e}")
-            _WYCKOFF_JSON_DATA = {}
-    return _WYCKOFF_JSON_DATA
-
-def wyckoff_database(json_filename="wyckoff.json"):
-    """
-    Returns the entire Wyckoff position database with processed coordinates.
-
-    This function processes all coordinates into sympy expressions and applies the equivalent
-    sites logic for each space group, just like wyckoff_positions() does for a
-    single space group.
-
-    Args:
-        json_filename (str): Path to the Wyckoff JSON data file.
-
-    Returns:
-        dict: A dictionary where keys are space group numbers/settings and values
-              are lists of processed Wyckoff position objects. Each Wyckoff position
-              object contains 'label', 'letter', 'multiplicity', 'coordinates', and
-              'positions' fields. Returns an empty dictionary if loading fails.
-    """
-    all_wyckoff_data = load_wyckoff_json(json_filename)
-    if not all_wyckoff_data:
-        return {}
-
-    processed_database = {}
-    for spacegroup_key, spacegroup_data in all_wyckoff_data.items():
-        processed_positions = _process_space_group_positions(spacegroup_data, spacegroup_key)
-        if processed_positions:
-            processed_database[spacegroup_key] = processed_positions
-
-    return processed_database
-
-
-def _coord_string_to_sympy_array(coord_string):
-    """
-    Converts a coordinate string "(x,y,z)" into a list of
-    simplified sympy expressions.
-    Handles replacements like '2x' -> '2*x' for sympy compatibility.
-    """
-    # Remove parentheses and split by comma
-    parts = coord_string.strip("()").split(",")
-    sympy_expressions = []
-    for part in parts:
-        try:
-            # Replace common patterns like '2x' with '2*x' for sympy
-            processed_part = (
-                part.replace("2x", "2*x").replace("2y", "2*y").replace("2z", "2*z")
-            )
-            # Sympify and simplify
-            sympy_expressions.append(cached_simplify(processed_part))
-        except (SyntaxError, TypeError, Exception) as e:
-            print(
-                f"Warning: Could not parse coordinate part '{part}' in '{coord_string}'. Error: {e}"
-            )
-            sympy_expressions.append(part)  # Keep original string on error
-    return sympy_expressions
-
-
-def _is_coord_in_list(coord, coord_list):
-    """Check if a coordinate is mathematically equivalent to any in the list."""
-    for existing_coord in coord_list:
-        if len(coord) != len(existing_coord):
-            continue
-
-        # Check if all elements are mathematically equivalent
-        all_equal = True
-        for c1, c2 in zip(coord, existing_coord):
-            # Try to check if c1 - c2 simplifies to 0
+    
+    def load_raw_data(self) -> Dict:
+        """Load the raw Wyckoff data from the JSON file.
+        
+        Returns:
+            The raw Wyckoff position data as a dictionary.
+        """
+        if self._raw_data is None:
             try:
-                diff = cached_simplify(c1 - c2)
-                if diff != 0:
+                # Find the data file
+                data_path = self._get_data_file_path(self.json_filename)
+                with open(data_path, "r") as f:
+                    self._raw_data = json.load(f)
+            except FileNotFoundError:
+                print(f"Error: Wyckoff JSON file '{self.json_filename}' not found.")
+                self._raw_data = {}  # Set to empty dict to avoid repeated load attempts
+            except json.JSONDecodeError:
+                print(f"Error: Could not decode JSON from file '{self.json_filename}'.")
+                self._raw_data = {}
+            except Exception as e:
+                print(f"An unexpected error occurred loading '{self.json_filename}': {e}")
+                self._raw_data = {}
+                
+        return self._raw_data
+    
+    @property
+    def data(self) -> Dict[str, List[WyckoffPosition]]:
+        """Get the fully processed Wyckoff database.
+        
+        Returns:
+            A dictionary mapping space group numbers/settings to lists of
+            WyckoffPosition objects with processed coordinates.
+        """
+        if self._processed_data is None:
+            self._processed_data = self._process_database()
+        return self._processed_data
+    
+    @safe_coord_processing
+    def _process_coordinate_part(self, part: str) -> Any:
+        """Process a single coordinate part into a sympy expression.
+        
+        Args:
+            part: String representation of a coordinate part (e.g., 'x', '1-y')
+            
+        Returns:
+            Simplified sympy expression
+        """
+        # Replace common patterns like '2x' with '2*x' for sympy
+        processed_part = part.replace("2x", "2*x").replace("2y", "2*y").replace("2z", "2*z")
+        # Sympify and simplify
+        return cached_simplify(processed_part)
+    
+    def _coord_string_to_sympy_array(self, coord_string: str) -> List[Any]:
+        """Convert a coordinate string to a list of sympy expressions.
+        
+        Args:
+            coord_string: String like "(x,y,z)" representing coordinates
+            
+        Returns:
+            List of sympy expressions
+        """
+        # Remove parentheses and split by comma
+        parts = coord_string.strip("()").split(",")
+        return [self._process_coordinate_part(part) for part in parts]
+    
+    def _is_coord_in_list(self, coord: List[Any], coord_list: List[List[Any]]) -> bool:
+        """Check if a coordinate is mathematically equivalent to any in the list.
+        
+        Args:
+            coord: List of sympy expressions representing a coordinate
+            coord_list: List of existing coordinates to check against
+            
+        Returns:
+            True if an equivalent coordinate exists, False otherwise
+        """
+        for existing_coord in coord_list:
+            if len(coord) != len(existing_coord):
+                continue
+
+            # Check if all elements are mathematically equivalent
+            all_equal = True
+            for c1, c2 in zip(coord, existing_coord):
+                try:
+                    diff = cached_simplify(c1 - c2)
+                    if diff != 0:
+                        all_equal = False
+                        break
+                except Exception:
+                    # If comparison fails, assume they're different
                     all_equal = False
                     break
-            except Exception:
-                # If comparison fails, assume they're different
-                all_equal = False
-                break
 
-        if all_equal:
-            return True
-    return False
-
-
-def _process_space_group_positions(spacegroup_data, spacegroup_key):
-    """
-    Process the Wyckoff positions for a single space group.
+            if all_equal:
+                return True
+        return False
     
-    Args:
-        spacegroup_data (dict): The raw data for a single space group from the JSON.
-        spacegroup_key (str): The space group number or label for error messages.
+    @validate_wyckoff_info
+    def _process_wyckoff_position(self, wyckoff_info: Dict, spacegroup_key: str,
+                                 equivalent_sites_parsed: List[List[Any]]) -> Optional[WyckoffPosition]:
+        """Process a single Wyckoff position from the raw data.
         
-    Returns:
-        list: A list of processed Wyckoff positions with embedded processed coordinates.
-    """
-    if spacegroup_data is None:
-        return []
-    
-    # Parse the additional positions (equivalent sites) first
-    equivalent_sites_str = spacegroup_data.get("additional_positions", [])
-    equivalent_sites_parsed = [
-        _coord_string_to_sympy_array(coords) for coords in equivalent_sites_str
-    ]
-
-    # List to store all processed Wyckoff positions
-    processed_positions = []
-
-    # Iterate through the Wyckoff positions listed in the JSON for this space group
-    for wyckoff_info in spacegroup_data.get("wyckoff_positions", []):
-        # Create a copy of the wyckoff_info to modify
-        processed_wyckoff_info = wyckoff_info.copy()
-        
-        letter = wyckoff_info.get("letter")
-        multiplicity = wyckoff_info.get("multiplicity")
+        Args:
+            wyckoff_info: Dictionary containing raw Wyckoff position data
+            spacegroup_key: Space group number/setting for error messages
+            equivalent_sites_parsed: List of parsed equivalent sites
+            
+        Returns:
+            Processed WyckoffPosition object or None if processing fails
+        """
+        # The decorator already validates letter and multiplicity are not None
+        # and converts them to the correct types
+        letter = wyckoff_info["letter"]  # Now safe to use direct access
+        multiplicity = wyckoff_info["multiplicity"]
+        site_symmetry = wyckoff_info.get("site_symmetry", "")
         coordinates_str_list = wyckoff_info.get("coordinates", [])
-
-        if letter is None or multiplicity is None:
-            print(
-                f"Skipping incomplete Wyckoff entry in space group {spacegroup_key}: {wyckoff_info}"
-            )
-            continue
-
-        # Create Wyckoff label (e.g., "4d")
-        label = str(multiplicity) + letter
-        processed_wyckoff_info["label"] = label  # Store label in the processed info
-
+        
+        # Create Wyckoff position object
+        position = WyckoffPosition(
+            letter=letter,
+            multiplicity=multiplicity,
+            site_symmetry=site_symmetry,
+            coordinates=coordinates_str_list
+        )
+        
         # Parse the base coordinates for this Wyckoff position
         base_wyckoff_coords = [
-            _coord_string_to_sympy_array(coords_str)
+            self._coord_string_to_sympy_array(coords_str)
             for coords_str in coordinates_str_list
         ]
 
@@ -213,7 +295,7 @@ def _process_space_group_positions(spacegroup_data, spacegroup_key):
                                 for b, e in zip(base_coord, equiv_site)
                             ]
                             # Only add if this coordinate isn't already in the list
-                            if not _is_coord_in_list(new_coord, combined_coords):
+                            if not self._is_coord_in_list(new_coord, combined_coords):
                                 combined_coords.append(new_coord)
                         except Exception as e:
                             print(
@@ -223,99 +305,169 @@ def _process_space_group_positions(spacegroup_data, spacegroup_key):
                         print(
                             f"Warning: Dimension mismatch between base coord {base_coord} and equiv site {equiv_site}"
                         )
-
-        # Add the positions to the wyckoff info
-        processed_wyckoff_info["positions"] = combined_coords
         
-        # Add the processed wyckoff info to the list
-        processed_positions.append(processed_wyckoff_info)
-
-    return processed_positions
-
-
-def _extract_label_positions_dict(processed_positions):
-    """
-    Helper function to extract a dictionary mapping Wyckoff labels to positions
-    from the new processed data structure. This is for backward compatibility.
+        # Set the processed positions
+        position.positions = combined_coords
+        return position
     
-    Args:
-        processed_positions (list): List of processed Wyckoff positions from _process_space_group_positions
+    def _process_space_group(self, spacegroup_data: Dict, spacegroup_key: str) -> List[WyckoffPosition]:
+        """Process all Wyckoff positions for a single space group.
         
-    Returns:
-        dict: A dictionary where keys are Wyckoff labels (e.g., "4a")
-              and values are lists of coordinate arrays (sympy expressions).
-    """
-    label_positions_dict = {}
-    
-    if not processed_positions:
-        return {}
-        
-    for wyckoff_info in processed_positions:
-        # Get the label and positions
-        letter = wyckoff_info.get("letter")
-        multiplicity = wyckoff_info.get("multiplicity")
-        positions = wyckoff_info.get("positions", [])
-        
-        if letter is None or multiplicity is None:
-            continue
+        Args:
+            spacegroup_data: Raw data for a space group from the JSON
+            spacegroup_key: Space group number/setting
             
-        label = str(multiplicity) + letter  # e.g. 4d
-        label_positions_dict[label] = positions
+        Returns:
+            List of processed WyckoffPosition objects
+        """
+        if spacegroup_data is None:
+            return []
+        
+        # Parse the additional positions (equivalent sites) first
+        equivalent_sites_str = spacegroup_data.get("additional_positions", [])
+        equivalent_sites_parsed = [
+            self._coord_string_to_sympy_array(coords) for coords in equivalent_sites_str
+        ]
+        
+        # Process each Wyckoff position
+        positions = []
+        for wyckoff_info in spacegroup_data.get("wyckoff_positions", []):
+            position = self._process_wyckoff_position(
+                wyckoff_info, spacegroup_key, equivalent_sites_parsed
+            )
+            if position is not None:
+                positions.append(position)
+                
+        return positions
     
-    return label_positions_dict
-
-
-def wyckoff_positions(sgn, json_filename="wyckoff.json"):
-    """
-    Get dictionary of {Wyckoff label: coordinates} for a given space group
-    number (sgn) by reading from a pre-parsed JSON file.
-
-    Args:
-        sgn (int or str): The space group number or label (e.g., "15-c").
-        json_filename (str): Path to the Wyckoff JSON data file.
-
-    Returns:
-        dict: A dictionary where keys are Wyckoff labels (e.g., "4a")
-              and values are lists of coordinate arrays (sympy expressions).
-              Returns an empty dictionary if the space group is not found
-              or an error occurs.
-    """
-    # Get the database using the wyckoff_database function
-    all_wyckoff_data = load_wyckoff_json(json_filename)
-    if not all_wyckoff_data:  # Check if loading failed
-        return {}
-
-    # Get the data for the specific space group
-    spacegroup_key = str(sgn)
-    spacegroup_data = all_wyckoff_data.get(spacegroup_key)
-
-    # If exact match not found, try to find variants (e.g., "3-b", "3-c" for input "3")
-    if spacegroup_data is None:
+    def _process_database(self) -> Dict[str, List[WyckoffPosition]]:
+        """Process the entire database of Wyckoff positions.
+        
+        Returns:
+            Dictionary mapping space group numbers/settings to lists of
+            processed WyckoffPosition objects.
+        """
+        raw_data = self.load_raw_data()
+        if not raw_data:
+            return {}
+            
+        processed_data = {}
+        for spacegroup_key, spacegroup_data in raw_data.items():
+            processed_positions = self._process_space_group(spacegroup_data, spacegroup_key)
+            if processed_positions:
+                processed_data[spacegroup_key] = processed_positions
+                
+        return processed_data
+    
+    def find_space_group_variant(self, sgn: Union[int, str]) -> Tuple[Optional[str], Optional[Dict]]:
+        """Find a space group or a suitable variant in the database.
+        
+        Args:
+            sgn: Space group number or label (e.g., "15-c")
+            
+        Returns:
+            Tuple of (space group key, space group data) or (None, None) if not found
+        """
+        raw_data = self.load_raw_data()
+        if not raw_data:
+            return None, None
+            
+        spacegroup_key = str(sgn)
+        spacegroup_data = raw_data.get(spacegroup_key)
+        
+        # If exact match found, return it
+        if spacegroup_data is not None:
+            return spacegroup_key, spacegroup_data
+            
         # Try to find a default setting
         if not isinstance(sgn, str) or "-" not in spacegroup_key:
             # Look for variants with this base number
             base_sg_number = spacegroup_key.split("-")[0] if "-" in spacegroup_key else spacegroup_key
-            variants = [k for k in all_wyckoff_data.keys() if k.startswith(f"{base_sg_number}-")]
-
+            variants = [k for k in raw_data.keys() if k.startswith(f"{base_sg_number}-")]
+            
             if variants:
                 # Use the first variant as default (usually -b setting)
                 spacegroup_key = variants[0]
-                spacegroup_data = all_wyckoff_data.get(spacegroup_key)
+                spacegroup_data = raw_data.get(spacegroup_key)
                 print(f"Note: Using space group '{spacegroup_key}' as default setting for space group {base_sg_number}.")
                 print(f"Available variants: {', '.join(variants)}")
+                return spacegroup_key, spacegroup_data
             else:
-                print(f"Warning: Space group '{sgn}' not found in '{json_filename}'.")
-                return {}
+                print(f"Warning: Space group '{sgn}' not found.")
         else:
-            print(f"Warning: Space group '{spacegroup_key}' not found in '{json_filename}'.")
-            return {}
-
-    # If we still don't have valid data, return empty dict
-    if spacegroup_data is None:
-        return {}
-
-    # Process the space group data using our helper function
-    processed_data = _process_space_group_positions(spacegroup_data, spacegroup_key)
+            print(f"Warning: Space group '{spacegroup_key}' not found.")
+            
+        return None, None
     
-    # Extract the {label: positions} dictionary for backward compatibility
-    return _extract_label_positions_dict(processed_data)
+    def wyckoff_positions(self, sgn: Union[int, str]) -> Dict[str, List[List[Any]]]:
+        """Get dictionary of {Wyckoff label: coordinates} for a given space group.
+        
+        Args:
+            sgn: Space group number or label (e.g., "15-c")
+            
+        Returns:
+            Dictionary mapping Wyckoff labels to lists of coordinate arrays
+        """
+        # Try to find the space group in the processed data
+        spacegroup_key = str(sgn)
+        if spacegroup_key in self.data:
+            positions = self.data[spacegroup_key]
+            # Ensure we only include positions with valid labels
+            return {pos.label: pos.positions for pos in positions if pos.label is not None}
+            
+        # If not found in processed data, try to find a variant
+        sg_key, sg_data = self.find_space_group_variant(sgn)
+        if sg_key is None or sg_data is None:
+            return {}
+            
+        # Process the space group and extract positions
+        positions = self._process_space_group(sg_data, sg_key)
+        # Ensure we only include positions with valid labels
+        return {pos.label: pos.positions for pos in positions if pos.label is not None}
+
+
+# Public API functions
+
+_wyckoff_db_instance = None
+
+def get_wyckoff_database(json_filename: str = "wyckoff.json") -> WyckoffDatabase:
+    """Get a singleton instance of the WyckoffDatabase.
+    
+    Args:
+        json_filename: Path to the JSON file containing Wyckoff positions
+        
+    Returns:
+        WyckoffDatabase instance
+    """
+    global _wyckoff_db_instance
+    if _wyckoff_db_instance is None or _wyckoff_db_instance.json_filename != json_filename:
+        _wyckoff_db_instance = WyckoffDatabase(json_filename)
+    return _wyckoff_db_instance
+
+
+def wyckoff_database(json_filename: str = "wyckoff.json") -> Dict[str, List[WyckoffPosition]]:
+    """Get the fully processed Wyckoff position database.
+    
+    Args:
+        json_filename: Path to the JSON file containing Wyckoff positions
+        
+    Returns:
+        Dictionary mapping space group numbers/settings to lists of
+        WyckoffPosition objects with processed coordinates
+    """
+    db = get_wyckoff_database(json_filename)
+    return db.data
+
+
+def wyckoff_positions(sgn: Union[int, str], json_filename: str = "wyckoff.json") -> Dict[str, List[List[Any]]]:
+    """Get dictionary of {Wyckoff label: coordinates} for a given space group.
+    
+    Args:
+        sgn: Space group number or label (e.g., "15-c")
+        json_filename: Path to the JSON file containing Wyckoff positions
+        
+    Returns:
+        Dictionary mapping Wyckoff labels to lists of coordinate arrays
+    """
+    db = get_wyckoff_database(json_filename)
+    return db.wyckoff_positions(sgn)

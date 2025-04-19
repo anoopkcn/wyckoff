@@ -10,7 +10,7 @@ def main():
     # Get the entire database
     # print("Loading the entire Wyckoff database...")
     database = wyckoff_database()
-    print(database["1"])
+    print(database["2"][0])
     # available_groups = list(database.keys())
     # total_space_groups = len(available_groups)
     # print(f"number of space groups: {total_space_groups} (230 standard + ({len(available_groups) - 230}) variations)")
