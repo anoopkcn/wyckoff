@@ -32,9 +32,9 @@ for more complex example checkout the [example](https://github.com/anoopkcn/wyck
 
 ## Info
 
-**If spacegroup variations are available for a spacegroup, and functions/dictionary are called/indexed without specifying the variation then first available variation will be returned.**
+**IMPORTANT: If variations are available for a spacegroup, and functions/dictionary are called/indexed without specifying the variation then first available variation will be returned.**
 
-**Following variation types are included in the database:**
+Following variation types are included in the database:
 
 1. **Unique axis settings**: Suffixes like "-b" and "-c" typically indicate which crystallographic axis is chosen as the unique axis, especially in monoclinic and orthorhombic systems. For example:
    - "3-b" means space group 3 with b-axis as the unique axis
