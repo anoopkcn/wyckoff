@@ -31,7 +31,7 @@ def main():
     # def wyckoff_positions(sgn):
     #     try:
     #         space_group = data[str(sgn)]
-    #         return {pos.label: pos.positions for pos in space_group.wyckoff_positions if pos.label is not None}
+    #         return {item.label: item.positions for item in space_group.wyckoff_positions if item.label is not None}
     #     except KeyError:
     #         return {}
 

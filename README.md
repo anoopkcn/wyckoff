@@ -22,13 +22,13 @@ from wyckoff import WyckoffDatabase
 wyckoff = WyckoffDatabase()
 data = wyckoff.data
 
-for items in data["2"]:
+for items in data["2"].wyckoff_positions:
     print(items)
 
-print("Spacegroup 3 (which is 3-b varient):")
-print(data["3"][0])
+print("Spacegroup 3:") # which is 3-b varient
+print(data["3"].wyckoff_positions)
 ```
-for more complex example checkout the [example](https://github.com/anoopkcn/wyckoff/blob/main/examples/example_usage.py) file
+for more complex example checkout the [example](https://github.com/anoopkcn/wyckoff/blob/main/examples/usage.py) file
 
 ## Info
 
@@ -42,8 +42,7 @@ Following variation types are included in the database:
 
 Example:
 ```python
-positions = wyckoff.wyckoff_positions("3-b")  # Space group 3 with b-axis as the unique axis
-print(positions)
+data["3-b"]  # Space group 3 with b-axis as the unique axis
 ```
 
 2. **Origin choice**: Suffixes like "-1" and "-2" usually indicate different origin choices for the same space group:
@@ -52,15 +51,13 @@ print(positions)
 
 Example:
 ```python
-positions = wyckoff.wyckoff_positions("48-1")  # Space group 48 with origin choice 1
-print(positions)
+data["48-1"]  # Space group 48 with origin choice 1
 ```
 3. **Cell choices**: Some suffixes may represent different conventional cell choices (hexagonal vs. rhombohedral settings in trigonal groups, for example).
 
 Example:
 ```python
-positions = wyckoff.wyckoff_positions("148-hexagonal")  # Space group 148 with hexagonal cell
-print(positions)
+data["148-hexagonal"]  # Space group 148 with hexagonal cell
 ```
 
 ## Data Source
