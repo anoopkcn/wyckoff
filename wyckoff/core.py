@@ -185,18 +185,22 @@ class WyckoffDatabase:
             except KeyError:
                 # If not found, look for a variant
                 sg_key, sg_data = self.db_instance.find_space_group_variant(key)
-                if sg_key is not None and sg_key in self:
-                    return super().__getitem__(sg_key)
             
-                # If a variant exists but not in processed data, process it now
-                if sg_key is not None and sg_data is not None:
-                    positions = self.db_instance._process_space_group(sg_data, sg_key)
-                    if positions:
-                        # Note: We don't modify the original dictionary, just return the result
-                        return positions
+                # No space group or variant found
+                if sg_key is None:
+                    raise KeyError(f"Space group '{key}' not found and no suitable variants exist")
                 
-                # If still not found, raise the original KeyError
-                raise KeyError(f"Space group '{key}' not found and no suitable variants exist")
+                # Variant exists and is already in processed data
+                if sg_key in self:
+                    return super().__getitem__(sg_key)
+                
+                # Variant exists but needs to be processed
+                positions = self.db_instance._process_space_group(sg_data, sg_key)
+                if positions:
+                    return positions
+                
+                # No valid positions found
+                raise KeyError(f"Could not process space group '{key}' or its variant '{sg_key}'")
 
     @property
     def data(self) -> Dict[str, List[Wyckoff]]:
@@ -434,29 +438,21 @@ class WyckoffDatabase:
 
     def wyckoff_positions(self, sgn: Union[int, str]) -> Dict[str, List[List[Any]]]:
         """Get dictionary of {Wyckoff label: coordinates} for a given space group.
-
+    
         Args:
             sgn: Space group number or label (e.g., "15-c")
-
+        
         Returns:
             Dictionary mapping Wyckoff labels to lists of coordinate arrays
         """
-        # Try to find the space group in the processed data
-        spacegroup_key = str(sgn)
-        if spacegroup_key in self.data:
-            positions = self.data[spacegroup_key]
-            # Ensure we only include positions with valid labels
+        try:
+            # Leverage the SpaceGroupDict to handle variant lookups
+            positions = self.data[str(sgn)]
+            # Convert the positions to the expected output format
             return {pos.label: pos.positions for pos in positions if pos.label is not None}
-
-        # If not found in processed data, try to find a variant
-        sg_key, sg_data = self.find_space_group_variant(sgn)
-        if sg_key is None or sg_data is None:
+        except KeyError:
+            # Return empty dict if no valid space group or variant is found
             return {}
-
-        # Process the space group and extract positions
-        positions = self._process_space_group(sg_data, sg_key)
-        # Ensure we only include positions with valid labels
-        return {pos.label: pos.positions for pos in positions if pos.label is not None}
 
 
 # Public API functions
@@ -487,9 +483,13 @@ def wyckoff_database(json_filename: str = "wyckoff.json") -> Dict[str, List[Wyck
     Returns:
         Dictionary mapping space group numbers/settings to lists of
         WyckoffPosition objects with processed coordinates
+        
+    Note:
+        This dictionary provides fallback lookups to space group variants.
+        For example, if you request result['3'] but only '3-b' exists,
+        it will return result['3-b'] instead of raising a KeyError.
     """
-    db = get_wyckoff_database(json_filename)
-    return db.data
+    return get_wyckoff_database(json_filename).data
 
 
 def wyckoff_positions(sgn: Union[int, str], json_filename: str = "wyckoff.json") -> Dict[str, List[List[Any]]]:
@@ -501,6 +501,10 @@ def wyckoff_positions(sgn: Union[int, str], json_filename: str = "wyckoff.json")
 
     Returns:
         Dictionary mapping Wyckoff labels to lists of coordinate arrays
+        
+    Note:
+        This function automatically finds space group variants when needed.
+        For example, if you request positions for space group 3 but only
+        space group 3-b exists, it will return positions for 3-b.
     """
-    db = get_wyckoff_database(json_filename)
-    return db.wyckoff_positions(sgn)
+    return get_wyckoff_database(json_filename).wyckoff_positions(sgn)
