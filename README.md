@@ -30,9 +30,9 @@ print(data["3"][0])
 ```
 for more complex example checkout the [example](https://github.com/anoopkcn/wyckoff/blob/main/examples/example_usage.py) file
 
-# Info
+## Info
 
-If spacegroup variations are available, and functions are called without specifying the variabtion then first variation will be returned.
+**If spacegroup variations are available for a spacegroup, and functions/dictionary are called/indexed without specifying the variation then first available variation will be returned.**
 
 **Following variation types are included in the database:**
 
