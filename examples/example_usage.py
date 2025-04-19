@@ -34,6 +34,9 @@ def main():
         for label, position_data in positions.items():
             print(f" \t{label}: {position_data}")
 
+    print("\nSpace group 3 first label:")
+    print(data["3"][0].label)
+
     # print("\nSpace group 48-1:")
     # positions = wyckoff_positions("48-1")
     # for label, position_data in positions.items():

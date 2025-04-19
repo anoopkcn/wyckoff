@@ -168,17 +168,54 @@ class WyckoffDatabase:
 
         return self._raw_data
 
+    class SpaceGroupDict(dict):
+        """A dictionary-like class that provides fallback lookups to space group variants.
+
+        When a space group number doesn't exist directly but variants do exist,
+        this class will return the first variant instead of raising a KeyError.
+        """
+        def __init__(self, data_dict, db_instance):
+            super().__init__(data_dict)
+            self.db_instance = db_instance
+
+        def __getitem__(self, key):
+            # Try direct access first
+            try:
+                return super().__getitem__(key)
+            except KeyError:
+                # If not found, look for a variant
+                sg_key, sg_data = self.db_instance.find_space_group_variant(key)
+                if sg_key is not None and sg_key in self:
+                    return super().__getitem__(sg_key)
+            
+                # If a variant exists but not in processed data, process it now
+                if sg_key is not None and sg_data is not None:
+                    positions = self.db_instance._process_space_group(sg_data, sg_key)
+                    if positions:
+                        # Note: We don't modify the original dictionary, just return the result
+                        return positions
+                
+                # If still not found, raise the original KeyError
+                raise KeyError(f"Space group '{key}' not found and no suitable variants exist")
+
     @property
     def data(self) -> Dict[str, List[Wyckoff]]:
         """Get the fully processed Wyckoff database.
-
+    
         Returns:
             A dictionary mapping space group numbers/settings to lists of
             WyckoffPosition objects with processed coordinates.
+        
+        Note:
+            This dictionary provides fallback lookups to space group variants.
+            For example, if you request data['3'] but only '3-b' exists,
+            it will return data['3-b'] instead of raising a KeyError.
         """
         if self._processed_data is None:
             self._processed_data = self._process_database()
-        return self._processed_data
+    
+        # Wrap the processed data in our custom dictionary class
+        return self.SpaceGroupDict(self._processed_data, self)
 
     @safe_coord_processing
     def _process_coordinate_part(self, part: str) -> Any:
