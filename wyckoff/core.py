@@ -187,16 +187,13 @@ class WyckoffDatabase:
             self.db_instance = db_instance
 
         def __getitem__(self, key):
-            # Try direct access first
             try:
                 return super().__getitem__(key)
             except KeyError:
-                # If not found, look for a variant
                 sg_key, sg_data = self.db_instance.find_space_group_variant(key)
 
-                # No space group or variant found
                 if sg_key is None:
-                    raise KeyError(f"Space group '{key}' not found and no suitable variants exist")
+                    return SpaceGroup(number=str(key))
 
                 # Variant exists and is already in processed data
                 if sg_key in self:
@@ -207,8 +204,7 @@ class WyckoffDatabase:
                 if space_group.wyckoff_positions:
                     return space_group
 
-                # No valid positions found
-                raise KeyError(f"Could not process space group '{key}' or its variant '{sg_key}'")
+                return SpaceGroup(number=str(key))
 
     @property
     def data(self) -> Dict[str, SpaceGroup]:
@@ -226,7 +222,6 @@ class WyckoffDatabase:
         if self._processed_data is None:
             self._processed_data = self._process_database()
 
-        # Wrap the processed data in our custom dictionary class
         return self.SpaceGroupDict(self._processed_data, self)
 
     @safe_coord_processing
@@ -241,7 +236,6 @@ class WyckoffDatabase:
         """
         # Replace common patterns like '2x' with '2*x' for sympy
         processed_part = part.replace("2x", "2*x").replace("2y", "2*y").replace("2z", "2*z")
-        # Sympify and simplify
         return cached_simplify(processed_part)
 
     def _coord_string_to_sympy_array(self, coord_string: str) -> List[Any]:
@@ -253,7 +247,6 @@ class WyckoffDatabase:
         Returns:
             List of sympy expressions
         """
-        # Remove parentheses and split by comma
         parts = coord_string.split(",")
         return [self._process_coordinate_part(part) for part in parts]
 
@@ -271,7 +264,6 @@ class WyckoffDatabase:
             if len(coord) != len(existing_coord):
                 continue
 
-            # Check if all elements are mathematically equivalent
             all_equal = True
             for c1, c2 in zip(coord, existing_coord):
                 try:
@@ -280,7 +272,6 @@ class WyckoffDatabase:
                         all_equal = False
                         break
                 except Exception:
-                    # If comparison fails, assume they're different
                     all_equal = False
                     break
 
@@ -353,7 +344,6 @@ class WyckoffDatabase:
                             f"Warning: Dimension mismatch between base coord {base_coord} and equiv site {equiv_site}"
                         )
 
-        # Set the processed positions
         position.positions = combined_coords
         return position
 
@@ -438,11 +428,8 @@ class WyckoffDatabase:
             variants = [k for k in raw_data.keys() if k.startswith(f"{base_sg_number}-")]
 
             if variants:
-                # Use the first variant as default (usually -b setting)
                 spacegroup_key = variants[0]
                 spacegroup_data = raw_data.get(spacegroup_key)
-                # print(f"Note: Using space group '{spacegroup_key}' as default setting for space group {base_sg_number}.")
-                # print(f"Available variants: {', '.join(variants)}")
                 return spacegroup_key, spacegroup_data
             else:
                 print(f"Warning: Space group '{sgn}' not found.")
