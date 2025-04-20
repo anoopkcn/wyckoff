@@ -35,6 +35,27 @@ for more complex example checkout the [example](https://github.com/anoopkcn/wyck
 
 ## Info
 
+This implementation uses a standard JSON file for the wyckoff data and implements a dataclass for the Wyckoff positions, add additional checks and validations to ensure data integrity, etc,.
+
+```python
+@dataclass
+class Wyckoff:
+    """Represents a single Wyckoff position with its properties and coordinates."""
+    letter: str
+    multiplicity: int
+    site_symmetry: str = ""
+    label: Optional[str] = None
+    positions: List[List[Any]] = field(default_factory=list)
+    coordinates: List[List[Any]] = field(default_factory=list)
+
+@dataclass
+class SpaceGroup:
+    """Represents a space group with its Wyckoff positions and additional positions."""
+    number: str
+    additional_positions: List[List[Any]] = field(default_factory=list)
+    wyckoff_positions: List[Wyckoff] = field(default_factory=list)
+```
+
 **IMPORTANT: If variations are available for a spacegroup, and functions/dictionary are called/indexed without specifying the variation then first available variation will be returned.**
 
 Following variation types are included in the database:
@@ -71,7 +92,7 @@ Following variation types are included in the database:
 
 ## Data Source
 
-This implementation is inspierd by a utility fuction in [doped](https://github.com/SMTG-Bham/doped/tree/main) project. That version used a non-standard datafile and string parsing the Wyckoff positions from [bilbao crystallographic server](https://www.cryst.ehu.es/). This implementation uses a standard JSON file for the data and implements a dataclass for the Wyckoff positions, add additional checks and validations to ensure data integrity, remove a bug that produces duplicate Wyckoff positions, etc,.
+This implementation is inspierd by a utility fuction in [doped](https://github.com/SMTG-Bham/doped/tree/main) project. That version used a non-standard datafile and string parsing the Wyckoff positions from [bilbao crystallographic server](https://www.cryst.ehu.es/).
 
 ## License
 
